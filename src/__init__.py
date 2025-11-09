@@ -2,14 +2,14 @@
 Wildfire Spread Prediction Package
 """
 from .data_loader import WildfireDataLoader
-from .graph_builder import SpatialTemporalGraphBuilder
+from .grid_graph_builder import GridBasedGraphBuilder
 from .models import MultiModalGCN, TemporalGCN, GraphAttentionWildfire, MultiModalFusionGNN
 from .trainer import WildfireTrainer
 from .utils import *
 
 __all__ = [
     'WildfireDataLoader',
-    'SpatialTemporalGraphBuilder',
+    'GridBasedGraphBuilder',
     'MultiModalGCN',
     'TemporalGCN',
     'GraphAttentionWildfire',

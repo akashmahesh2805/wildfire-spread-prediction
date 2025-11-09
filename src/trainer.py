@@ -19,7 +19,8 @@ class WildfireTrainer:
                  model: nn.Module,
                  device: Optional[torch.device] = None,
                  learning_rate: float = 0.001,
-                 weight_decay: float = 1e-5):
+                 weight_decay: float = 1e-5,
+                 class_weights: Optional[torch.Tensor] = None):
         """
         Initialize trainer.
         
@@ -36,6 +37,14 @@ class WildfireTrainer:
         self.optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
         self.criterion = nn.MSELoss()  # For regression (fire intensity)
         self.binary_criterion = nn.BCEWithLogitsLoss()  # For binary classification (fire presence)
+        
+        # Weighted loss for class imbalance
+        if class_weights is not None:
+            self.weighted_criterion = nn.MSELoss(reduction='none')
+            self.class_weights = class_weights.to(device)
+        else:
+            self.weighted_criterion = None
+            self.class_weights = None
         
         self.train_losses = []
         self.val_losses = []
@@ -73,7 +82,16 @@ class WildfireTrainer:
             
             # Compute loss
             if task == 'regression':
-                loss = self.criterion(out.squeeze(), targets.float())
+                if self.weighted_criterion is not None and self.class_weights is not None:
+                    # Weighted loss for class imbalance
+                    loss_per_sample = self.weighted_criterion(out.squeeze(), targets.float())
+                    # Create weights: higher weight for non-zero targets
+                    weights = torch.where(targets > 0, 
+                                        self.class_weights[1], 
+                                        self.class_weights[0])
+                    loss = (loss_per_sample * weights).mean()
+                else:
+                    loss = self.criterion(out.squeeze(), targets.float())
             else:
                 loss = self.binary_criterion(out.squeeze(), targets.float())
             
@@ -121,7 +139,15 @@ class WildfireTrainer:
                     
                     # Compute loss
                     if task == 'regression':
-                        loss = self.criterion(out.squeeze(), targets.float())
+                        if self.weighted_criterion is not None and self.class_weights is not None:
+                            # Weighted loss for class imbalance
+                            loss_per_sample = self.weighted_criterion(out.squeeze(), targets.float())
+                            weights = torch.where(targets > 0, 
+                                                self.class_weights[1], 
+                                                self.class_weights[0])
+                            loss = (loss_per_sample * weights).mean()
+                        else:
+                            loss = self.criterion(out.squeeze(), targets.float())
                     else:
                         loss = self.binary_criterion(out.squeeze(), targets.float())
                     
@@ -197,12 +223,20 @@ class WildfireTrainer:
                 
                 if save_path:
                     os.makedirs(os.path.dirname(save_path), exist_ok=True)
+                    # Convert numpy scalars to Python types for safer serialization
+                    safe_metrics = {}
+                    for k, v in val_metrics.items():
+                        if isinstance(v, np.generic):
+                            safe_metrics[k] = v.item()
+                        else:
+                            safe_metrics[k] = v
+                    
                     torch.save({
                         'epoch': epoch,
                         'model_state_dict': self.model.state_dict(),
                         'optimizer_state_dict': self.optimizer.state_dict(),
-                        'val_loss': val_loss,
-                        'val_metrics': val_metrics
+                        'val_loss': float(val_loss),
+                        'val_metrics': safe_metrics
                     }, save_path)
                     print(f"Saved best model to {save_path}")
             else:

@@ -69,15 +69,17 @@ class SpatialTemporalGraphBuilder:
         if temporal_window is None:
             temporal_window = self.temporal_window
         
-        # Sort by time
-        sorted_indices = timestamps.argsort()
-        sorted_times = timestamps.iloc[sorted_indices]
+        # Sort by time and get indices as numpy array
+        sorted_indices = timestamps.argsort().values  # Convert to numpy array
+        sorted_times = timestamps.iloc[sorted_indices].values  # Convert to numpy array
         
         edge_list = []
         
         # Connect nodes within temporal window
-        for i, t1 in enumerate(sorted_times):
-            for j, t2 in enumerate(sorted_times[i+1:], start=i+1):
+        for i in range(len(sorted_times)):
+            t1 = pd.Timestamp(sorted_times[i])
+            for j in range(i + 1, len(sorted_times)):
+                t2 = pd.Timestamp(sorted_times[j])
                 time_diff = (t2 - t1).total_seconds() / 3600  # hours
                 
                 if time_diff <= temporal_window:
@@ -153,10 +155,14 @@ class SpatialTemporalGraphBuilder:
             current_time = row['time']
             future_time = current_time + pd.Timedelta(hours=prediction_horizon)
             
+            # Round coordinates for comparison (row values are floats, not Series)
+            lat_rounded = round(row['latitude'], 3)
+            lon_rounded = round(row['longitude'], 3)
+            
             # Find fire events at same location in future
             future_events = df_sorted[
-                (df_sorted['latitude'].round(3) == row['latitude'].round(3)) &
-                (df_sorted['longitude'].round(3) == row['longitude'].round(3)) &
+                (df_sorted['latitude'].round(3) == lat_rounded) &
+                (df_sorted['longitude'].round(3) == lon_rounded) &
                 (df_sorted['time'] == future_time)
             ]
             
@@ -192,7 +198,9 @@ class SpatialTemporalGraphBuilder:
                    df: pd.DataFrame,
                    feature_groups: dict,
                    include_temporal: bool = True,
-                   include_spatial: bool = True) -> Data:
+                   include_spatial: bool = True,
+                   max_edges: Optional[int] = None,
+                   sample_nodes: Optional[int] = None) -> Data:
         """
         Build complete spatial-temporal graph.
         
@@ -201,16 +209,24 @@ class SpatialTemporalGraphBuilder:
             feature_groups: Dictionary mapping modality to feature columns
             include_temporal: Whether to include temporal edges
             include_spatial: Whether to include spatial edges
+            max_edges: Maximum number of edges (samples if exceeded)
+            sample_nodes: If provided, randomly sample this many nodes
             
         Returns:
             PyTorch Geometric Data object
         """
+        # Sample nodes if requested (for memory efficiency)
+        sampled_df = df.copy()
+        if sample_nodes is not None and len(df) > sample_nodes:
+            sampled_df = df.sample(n=min(sample_nodes, len(df)), random_state=42).reset_index(drop=True)
+            print(f"  Sampled {len(sampled_df)} nodes from {len(df)} total nodes")
+        
         # Build node features
-        node_features = self.build_node_features(df, feature_groups)
+        node_features = self.build_node_features(sampled_df, feature_groups)
         
         # Get coordinates and timestamps
-        coordinates = df[['latitude', 'longitude']].values
-        timestamps = df['time']
+        coordinates = sampled_df[['latitude', 'longitude']].values
+        timestamps = sampled_df['time']
         
         # Build edges
         edge_list = []
@@ -218,17 +234,26 @@ class SpatialTemporalGraphBuilder:
         if include_spatial:
             spatial_edges = self.compute_spatial_edges(coordinates)
             edge_list.append(spatial_edges)
+            print(f"  Spatial edges: {spatial_edges.shape[1]}")
         
         if include_temporal:
             temporal_edges = self.compute_temporal_edges(timestamps)
             if temporal_edges.shape[1] > 0:
                 edge_list.append(temporal_edges)
+                print(f"  Temporal edges: {temporal_edges.shape[1]}")
         
         # Combine edges
         if len(edge_list) > 0:
             edge_index = np.concatenate(edge_list, axis=1)
             # Remove duplicate edges
             edge_index = np.unique(edge_index, axis=1)
+            
+            # Sample edges if too many (for memory efficiency)
+            if max_edges is not None and edge_index.shape[1] > max_edges:
+                print(f"  Sampling {max_edges} edges from {edge_index.shape[1]} total edges")
+                sample_idx = np.random.choice(edge_index.shape[1], max_edges, replace=False)
+                edge_index = edge_index[:, sample_idx]
+            
             edge_index = torch.LongTensor(edge_index)
             edge_index = to_undirected(edge_index)  # Make undirected
         else:
@@ -237,12 +262,14 @@ class SpatialTemporalGraphBuilder:
         # Create positions (coordinates) for visualization
         pos = torch.FloatTensor(coordinates)
         
-        # Create PyTorch Geometric Data object
+        # Store sampled dataframe reference for target creation
         data = Data(
             x=node_features,
             edge_index=edge_index,
             pos=pos
         )
+        # Store the sampled dataframe for later use (optional)
+        data.sampled_df = sampled_df
         
         return data
     
