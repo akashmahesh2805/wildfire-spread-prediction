@@ -56,6 +56,7 @@ print(f"\nFeature Groups:")
 for group, cols in feature_groups.items():
     print(f"  {group}: {len(cols)} features")
 
+# -> Change to nearest neighbour (neares 3-5 neighbours)
 # Handle missing values
 print("\nHandling missing values...")
 df = df.sort_values('time')
@@ -75,6 +76,7 @@ print("=" * 60)
 graph_builder = GridBasedGraphBuilder(
     grid_size=0.01,  # ~1.1 km grid cells
     temporal_window=1  # 1 hour
+    # -> Change to 6 hrs
 )
 
 # Split data temporally
@@ -165,6 +167,7 @@ print("=" * 60)
 input_dim = train_graph.x.shape[1]
 print(f"Input feature dimension: {input_dim}")
 
+# -> Change to Graph Wave Net
 # Initialize model
 model = MultiModalGCN(
     input_dim=input_dim,
