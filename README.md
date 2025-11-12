@@ -2,161 +2,404 @@
 
 ## Project Overview
 
-This project aims to predict wildfire spread using a Multi-Modal Graph Neural Network (GNN) that combines:
+This project implements a **Spatio-Temporal Wildfire Spread Prediction** system using a **Multi-Modal Graph Neural Network (GNN)** for the Los Angeles region. The system leverages multiple data modalities (fire detection, weather, and topographic data) to predict wildfire spread patterns over time and space.
 
-- **Spatial data**: Fire locations (latitude, longitude), topographic features
-- **Temporal data**: Time-series weather conditions and fire progression
-- **Multi-modal features**: Fire characteristics, weather, and terrain data
+## Dataset Structure
 
-## Project Structure
+The project uses three primary datasets covering the Los Angeles area:
 
-```
-wildfire-spread-prediction/
-├── data/
-│   ├── fire_data.csv              # Fire detection data (29,208 records)
-│   ├── weather_data.csv            # Hourly weather data (48,192 records)
-│   ├── topo_data_cleaned.csv    # Topographic features (11,461 records)
-│   └── windspeed_cleaned.csv      # Wind speed data
-├── notebooks/
-│   ├── 01_data_exploration.ipynb  # Data exploration and analysis
-│   ├── 02_data_preprocessing.ipynb # Data cleaning and feature engineering
-│   ├── 03_graph_construction.ipynb # Building spatial-temporal graphs
-│   ├── 04_model_training.ipynb    # GNN model training
-│   └── 05_evaluation.ipynb        # Model evaluation and visualization
-├── src/
-│   ├── data_loader.py             # Data loading utilities
-│   ├── graph_builder.py           # Graph construction from spatial data
-│   ├── models.py                  # GNN model architectures
-│   ├── trainer.py                 # Training loop and utilities
-│   └── utils.py                   # Helper functions
-├── models/                         # Saved model checkpoints
-├── results/                        # Evaluation results and plots
-└── requirements.txt                # Python dependencies
+### 1. Fire Detection Data (`fire_data.csv`)
 
-```
+**Size:** 29,208 fire detection records
 
-## Data Description
+**Columns:**
 
-### 1. Fire Data (`fire_data.csv`)
+- **Spatial Features:**
+  - `latitude`, `longitude`: Geographic coordinates of fire detections
+- **Temporal Features:**
+  - `acq_date`: Acquisition date (format: DD-MM-YYYY)
+  - `acq_time`: Acquisition time (HHMM format)
+- **Fire Characteristics:**
+  - `brightness`: Brightness temperature of the fire pixel (Kelvin)
+  - `bright_t31`: Brightness temperature at channel 31 (Kelvin)
+  - `frp`: Fire Radiative Power (MW) - measures fire intensity
+  - `confidence`: Confidence level of fire detection
+- **Satellite Metadata:**
+  - `satellite`: Satellite identifier (e.g., N20)
+  - `instrument`: Sensor type (e.g., VIIRS)
+  - `scan`, `track`: Pixel scan and track dimensions
+  - `daynight`: Day (D) or Night (N) detection
+  - `type`: Fire type classification
+  - `version`: Data version
 
-- **29,208 fire detection records**
-- Features: latitude, longitude, brightness, FRP (Fire Radiative Power), scan, track, satellite info, confidence, timestamps
-- Key columns: `latitude`, `longitude`, `brightness`, `frp`, `acq_date`, `acq_time`
+**Purpose:** Provides historical fire occurrence data with spatial and temporal information, serving as ground truth for training and validation.
 
-### 2. Weather Data (`weather_data.csv`)
+---
 
-- **48,192 hourly weather records**
-- Features: temperature, relative humidity, wind speed, wind direction, precipitation
-- Key columns: `time`, `temperature_2m`, `relative_humidity_2m`, `wind_speed_10m`, `wind_direction_10m`, `precipitation`
+### 2. Weather Data (`output_final_temp_celsius_fixed.csv`)
+
+**Size:** 1,048,575 weather records
+
+**Columns:**
+
+- **Spatial Features:**
+  - `latitude`, `longitude`: Geographic coordinates
+- **Temporal Features:**
+  - `date`: Date (format: DD-MM-YYYY)
+  - `time`: Time (HHMM format)
+- **Weather Variables:**
+  - `u10`: U-component of wind at 10m height (m/s) - eastward wind
+  - `v10`: V-component of wind at 10m height (m/s) - northward wind
+  - `t2m`: Temperature at 2m height (°C)
+
+**Purpose:** Provides meteorological conditions that significantly influence wildfire spread. Wind speed and direction (derived from u10, v10) are critical factors in fire propagation.
+
+---
 
 ### 3. Topographic Data (`topo_data_cleaned.csv`)
 
-- **11,461 location records**
-- Features: elevation, slope, aspect, vegetation cover, vegetation type, fuel characteristics
-- Key columns: `latitude`, `longitude`, `elevation`, `slope`, `aspect`, `vegetation_cover`, `fuel_vegetation_cover`
+**Size:** 11,461 topographic records
 
-## Workflow Overview
+**Columns:**
 
-### Phase 1: Data Understanding & Preprocessing
+- **Spatial Features:**
+  - `longitude`, `latitude`: Geographic coordinates
+- **Topographic Features:**
+  - `elevation`: Elevation above sea level (meters)
+  - `slope`: Terrain slope (degrees or percentage)
+  - `aspect`: Terrain aspect/orientation (degrees, typically 0-360°)
+- **Vegetation Features:**
+  - `vegetation_cover`: Percentage or index of vegetation cover
+  - `vegetation_type`: Classification code for vegetation type
+  - `fuel_vegetation_cover`: Fuel load vegetation cover
+  - `fuel_vegetation_height`: Height of fuel vegetation (meters)
 
-1. **Data Exploration**: Understand distributions, missing values, temporal patterns
-2. **Data Cleaning**: Handle missing values, outliers, coordinate alignment
-3. **Feature Engineering**: Create temporal features, spatial features, derived metrics
+**Purpose:** Provides static terrain and fuel characteristics that affect fire behavior. Elevation, slope, and aspect influence fire spread direction and speed, while vegetation data indicates fuel availability.
 
-### Phase 2: Graph Construction
+---
 
-1. **Spatial Graph**: Connect nearby fire locations based on distance
-2. **Temporal Graph**: Connect fire events across time steps
-3. **Multi-Modal Features**: Combine fire, weather, and topographic features
+## System Architecture
 
-### Phase 3: Model Development
+### Multi-Modal Graph Neural Network Approach
 
-1. **Graph Neural Network Architecture**:
-   - Spatial GNN layers (GCN, GAT, or GraphSAGE)
-   - Temporal modeling (LSTM/GRU or Temporal GNN)
-   - Multi-modal feature fusion
-2. **Training**: Train on historical fire spread patterns
-3. **Validation**: Evaluate on held-out temporal periods
+The wildfire spread prediction system uses a **graph-based representation** where:
 
-### Phase 4: Prediction & Evaluation
+1. **Graph Construction:**
 
-1. **Spread Prediction**: Predict future fire locations and intensity
-2. **Evaluation Metrics**: Accuracy, precision, recall, spatial error
-3. **Visualization**: Map-based visualizations of predictions
+   - **Nodes:** Represent spatial locations (grid cells or points of interest) in the Los Angeles region
+   - **Edges:** Connect neighboring nodes based on spatial proximity (e.g., k-nearest neighbors or distance threshold)
+   - **Node Features:** Multi-modal features from all three datasets
 
-## Installation
+2. **Multi-Modal Feature Integration:**
 
-```bash
-# Create virtual environment (if not already created)
-python -m venv venv
-venv\Scripts\activate  # Windows
-# source venv/bin/activate  # Linux/Mac
+   - **Fire Modality:** Historical fire occurrences, intensity (FRP), brightness
+   - **Weather Modality:** Wind vectors (u10, v10), temperature (t2m)
+   - **Topographic Modality:** Elevation, slope, aspect, vegetation/fuel characteristics
 
-# Install dependencies
-pip install -r requirements.txt
+3. **Temporal Modeling:**
+   - Uses **Temporal Graph Neural Networks (TGNN)** or **Graph Convolutional Recurrent Networks (GCRN)**
+   - Captures temporal dependencies in fire spread patterns
+   - Processes sequences of graph snapshots over time
+
+### Architecture Components
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    Data Preprocessing                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐                   │
+│  │  Fire    │  │ Weather  │  │ Topo     │                   │
+│  │  Data    │  │  Data    │  │  Data    │                   │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘                   │
+│       │             │             │                         │
+│       └─────────────┴─────────────┘                         │
+│                    │                                        │
+│              Feature Fusion                                 │
+└─────────────────────┼───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│              Graph Construction                             │
+│  • Spatial Grid/Point Cloud                                 │
+│  • Edge Creation (k-NN or distance-based)                   │
+│  • Multi-modal Node Features                                │
+└─────────────────────┼───────────────────────────────────────┘
+                      │
+┌─────────────────────▼───────────────────────────────────────┐
+│         Multi-Modal Graph Neural Network                    │
+│  ┌──────────────────────────────────────────────┐           │
+│  │  Modality-Specific Encoders                  │           │
+│  │  • Fire Encoder (CNN/MLP)                    │           │
+│  │  • Weather Encoder (MLP)                     │           │
+│  │  • Topo Encoder (MLP)                        │           │
+│  └──────────────┬───────────────────────────────┘           │
+│                 │                                           │
+│  ┌──────────────▼───────────────────────────────┐           │
+│  │  Feature Fusion Layer                        │           │
+│  │  (Concatenation/Attention/Weighted Sum)      │           │
+│  └──────────────┬───────────────────────────────┘           │
+│                 │                                           │
+│  ┌──────────────▼───────────────────────────────┐           │
+│  │  Graph Convolution Layers                    │           │
+│  │  (GCN/GAT/GraphSAGE)                         │           │
+│  └──────────────┬───────────────────────────────┘           │
+│                 │                                           │
+│  ┌──────────────▼───────────────────────────────┐           │
+│  │  Temporal Modeling                           │           │
+│  │  (LSTM/GRU/Transformer on Graph Sequences)   │           │
+│  └──────────────┬───────────────────────────────┘           │
+└─────────────────┼───────────────────────────────────────────┘
+                  │
+┌─────────────────▼───────────────────────────────────────────┐
+│              Prediction Head                                │
+│  • Fire Spread Probability                                  │
+│  • Fire Intensity (FRP)                                     │
+│  • Spatial Spread Direction                                 │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+---
 
-1. **Explore the data**:
+## How It Works
 
-   ```python
-   jupyter notebook notebooks/01_data_exploration.ipynb
-   ```
+### 1. Data Preprocessing
 
-2. **Preprocess data**:
+**Spatial Alignment:**
 
-   ```python
-   jupyter notebook notebooks/02_data_preprocessing.ipynb
-   ```
+- All datasets are spatially aligned to a common grid or point cloud
+- Interpolation may be needed to match spatial resolutions
+- Temporal alignment ensures features correspond to the same time steps
 
-3. **Build graphs**:
+**Feature Engineering:**
 
-   ```python
-   jupyter notebook notebooks/03_graph_construction.ipynb
-   ```
+- **Wind Speed & Direction:** Calculate from u10 and v10:
+  - Wind speed = √(u10² + v10²)
+  - Wind direction = arctan2(v10, u10)
+- **Fire History:** Aggregate historical fire occurrences per location
+- **Temporal Features:** Extract day-of-year, hour-of-day, time since last fire
 
-4. **Train model**:
+**Graph Construction:**
 
-   ```python
-   jupyter notebook notebooks/04_model_training.ipynb
-   ```
+- Create nodes for each spatial location (grid cell or point)
+- Connect nodes based on:
+  - **Spatial proximity:** k-nearest neighbors or distance threshold
+  - **Topographic connectivity:** Consider elevation changes
+  - **Wind direction:** Weight edges based on prevailing wind patterns
 
-5. **Evaluate**:
-   ```python
-   jupyter notebook notebooks/05_evaluation.ipynb
-   ```
+### 2. Multi-Modal Feature Encoding
 
-## Key Concepts
+Each modality is processed through specialized encoders:
 
-### Spatial-Temporal Graph
+- **Fire Modality Encoder:**
 
-- **Nodes**: Fire events at specific locations and times
-- **Spatial Edges**: Connect nearby fire locations (within distance threshold)
-- **Temporal Edges**: Connect fire events across consecutive time steps
-- **Node Features**: Multi-modal features (fire intensity, weather, terrain)
+  - Input: brightness, FRP, confidence, historical fire counts
+  - Output: Fire feature embeddings
 
-### Multi-Modal Features
+- **Weather Modality Encoder:**
 
-- **Fire Modality**: brightness, FRP, confidence
-- **Weather Modality**: temperature, humidity, wind, precipitation
-- **Terrain Modality**: elevation, slope, aspect, vegetation
+  - Input: u10, v10, t2m, derived wind speed/direction
+  - Output: Weather feature embeddings
 
-### Prediction Task
+- **Topographic Modality Encoder:**
+  - Input: elevation, slope, aspect, vegetation features
+  - Output: Topographic feature embeddings
 
-- **Input**: Current fire state + weather + terrain
-- **Output**: Future fire spread (next time step locations and intensities)
+### 3. Graph Neural Network Processing
+
+**Graph Convolution:**
+
+- Nodes aggregate information from neighboring nodes
+- Uses message passing to propagate fire spread information
+- Multiple layers capture multi-hop dependencies
+
+**Key Operations:**
+
+- **Message Passing:** Each node receives messages from neighbors
+- **Aggregation:** Combine neighbor messages (mean, max, attention)
+- **Update:** Update node representations based on aggregated messages
+
+### 4. Temporal Modeling
+
+**Sequence Processing:**
+
+- Process graph snapshots at each time step
+- Use recurrent or transformer architectures to model temporal dynamics
+- Capture how fire spreads over time
+
+**Temporal Features:**
+
+- Historical fire states
+- Weather evolution
+- Time-dependent patterns (seasonality, diurnal cycles)
+
+### 5. Prediction
+
+**Outputs:**
+
+- **Fire Spread Probability:** Likelihood of fire at each location at future time steps
+- **Fire Intensity:** Predicted FRP values
+- **Spread Direction:** Predicted direction of fire propagation
+
+**Loss Functions:**
+
+- Binary cross-entropy for fire occurrence
+- Mean squared error for fire intensity
+- Custom loss combining spatial and temporal accuracy
+
+---
+
+## Implementation Workflow
+
+### Step 1: Data Loading and Exploration
+
+```python
+# Load datasets
+fire_df = pd.read_csv('fire_data.csv')
+weather_df = pd.read_csv('output_final_temp_celsius_fixed.csv')
+topo_df = pd.read_csv('topo_data_cleaned.csv')
+
+# Explore data distributions, missing values, temporal ranges
+```
+
+### Step 2: Data Preprocessing
+
+```python
+# Spatial alignment to common grid
+# Temporal alignment and feature engineering
+# Create unified feature matrix per time step
+```
+
+### Step 3: Graph Construction
+
+```python
+# Create spatial graph
+# Define node features from multi-modal data
+# Create edges based on spatial relationships
+```
+
+### Step 4: Model Architecture
+
+```python
+# Define modality encoders
+# Graph convolution layers
+# Temporal modeling layers
+# Prediction head
+```
+
+### Step 5: Training
+
+```python
+# Split data into train/validation/test sets
+# Define loss function
+# Train model with temporal sequences
+# Validate on held-out data
+```
+
+### Step 6: Evaluation
+
+```python
+# Evaluate on test set
+# Metrics: Accuracy, Precision, Recall, F1-score
+# Spatial accuracy metrics
+# Temporal prediction accuracy
+```
+
+---
+
+## Key Challenges and Solutions
+
+### Challenge 1: Multi-Modal Data Integration
+
+**Solution:** Use modality-specific encoders followed by fusion layers (concatenation, attention mechanisms, or learned weighted combinations)
+
+### Challenge 2: Spatial-Temporal Alignment
+
+**Solution:**
+
+- Create spatial grid with appropriate resolution
+- Temporal interpolation for missing time steps
+- Handle different temporal resolutions across modalities
+
+### Challenge 3: Imbalanced Data
+
+**Solution:**
+
+- Fire occurrences are rare events
+- Use weighted loss functions, focal loss, or oversampling techniques
+
+### Challenge 4: Graph Construction
+
+**Solution:**
+
+- Use adaptive graph construction (learn edge weights)
+- Consider multiple edge types (spatial, topographic, wind-based)
+
+### Challenge 5: Temporal Dependencies
+
+**Solution:**
+
+- Use sequence models (LSTM, GRU, Transformers) on graph sequences
+- Capture long-term dependencies with attention mechanisms
+
+---
+
+## Expected Outcomes
+
+The model should be able to:
+
+1. **Predict Fire Occurrence:** Identify locations likely to experience fires
+2. **Predict Fire Spread:** Forecast how fires will spread spatially over time
+3. **Predict Fire Intensity:** Estimate fire radiative power (FRP) at different locations
+4. **Understand Influencing Factors:** Identify which factors (weather, topography, vegetation) most influence fire spread
+
+---
+
+## Evaluation Metrics
+
+- **Spatial Accuracy:**
+  - Intersection over Union (IoU) for fire areas
+  - Distance-based metrics (Hausdorff distance)
+- **Temporal Accuracy:**
+  - Time-to-event prediction accuracy
+  - Sequence prediction metrics
+- **Classification Metrics:**
+  - Precision, Recall, F1-score
+  - Area Under ROC Curve (AUC-ROC)
+- **Regression Metrics:**
+  - Mean Absolute Error (MAE) for FRP prediction
+  - Root Mean Squared Error (RMSE)
+
+---
 
 ## Dependencies
 
-- PyTorch / PyTorch Geometric (for GNN)
-- NumPy, Pandas (data processing)
-- Scikit-learn (evaluation)
-- Matplotlib, Seaborn (visualization)
-- Jupyter (notebooks)
+Typical libraries required:
+
+- `torch` / `torch-geometric` - Graph neural networks
+- `pandas`, `numpy` - Data manipulation
+- `scikit-learn` - Preprocessing and evaluation
+- `matplotlib`, `seaborn` - Visualization
+- `geopandas` - Spatial data handling (optional)
+
+---
+
+## Future Enhancements
+
+1. **Real-time Prediction:** Deploy model for real-time wildfire monitoring
+2. **Uncertainty Quantification:** Provide confidence intervals for predictions
+3. **Explainability:** Visualize which features contribute most to predictions
+4. **Multi-scale Modeling:** Combine fine-grained and coarse-grained predictions
+5. **Integration with Remote Sensing:** Incorporate real-time satellite imagery
+
+---
 
 ## References
 
-- Graph Neural Networks for Spatial-Temporal Forecasting
-- Multi-Modal Learning in GNNs
-- Wildfire Spread Prediction Literature
+- Graph Neural Networks for Spatio-Temporal Forecasting
+- Multi-Modal Learning in Remote Sensing
+- Wildfire Spread Modeling
+- Temporal Graph Neural Networks
+
+---
+
+## Contact
+
+For questions or contributions, please refer to the project repository.

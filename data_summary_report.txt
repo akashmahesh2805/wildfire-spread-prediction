@@ -1,0 +1,26 @@
+============================================================
+WILDFIRE DATA SUMMARY REPORT
+============================================================
+
+DATASET OVERVIEW
+------------------------------------------------------------
+Fire Data: 29208 records, 16 features
+Weather Data: 1048575 records, 8 features
+Topographic Data: 11461 records, 9 features
+
+SPATIAL COVERAGE
+------------------------------------------------------------
+Fire Data - Lat: [33.7002, 34.8491], Lon: [-119.0000, -117.6001]
+Weather Data - Lat: [32.7960, 34.7960], Lon: [-119.1000, -117.6000]
+Topo Data - Lat: [32.7960, 34.8262], Lon: [-118.9540, -117.6458]
+
+TEMPORAL COVERAGE
+------------------------------------------------------------
+Fire Data: 2020-01-01 00:00:00 to 2025-06-30 00:00:00
+Weather Data: 2020-01-01 00:00:00 to 2023-07-04 00:00:00
+
+DATA QUALITY
+------------------------------------------------------------
+Fire Data Missing Values: 0
+Weather Data Missing Values: 0
+Topo Data Missing Values: 0
