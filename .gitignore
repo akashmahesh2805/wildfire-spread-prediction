@@ -1,4 +1,5 @@
 # Python virtual environments
 venv/
 .venv/
-env/
+env/processed_data.pkl
+temporal_graphs.pkl
